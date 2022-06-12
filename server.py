@@ -281,7 +281,7 @@ def upload_to_ipfs(filepath):
 
 global gan
 gan=GAN()
-gan.load_models("discriminator_3200", "generator_3200")
+gan.load_models("discriminator_4400", "generator_4400")
 
 def main():
     bottle.run(host='0.0.0.0', port=8080, server='paste')
