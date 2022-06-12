@@ -2,3 +2,5 @@ keras
 matplotlib
 numpy
 bottle
+requests
+paste

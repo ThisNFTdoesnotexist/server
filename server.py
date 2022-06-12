@@ -1,13 +1,14 @@
 import bottle
-from bottle import route, run, template, request, static_file
+from bottle import route, run, template, request, static_file, response
 
-import numpy as np
-import os 
+import numpy as np 
 import matplotlib.pyplot as plt
 import tensorflow as tf
 from PIL import Image
 from matplotlib import cm
 import uuid
+import requests
+
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -208,19 +209,44 @@ class GAN():
         self.discriminator = tf.keras.models.load_model(discriminator)
         self.generator = tf.keras.models.load_model(generator)
         
+
+# the decorator
+def enable_cors(fn):
+    def _enable_cors(*args, **kwargs):
+        # set CORS headers
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Origin, Accept, Content-Type, X-Requested-With, X-CSRF-Token'
+
+        if bottle.request.method != 'OPTIONS':
+            # actual request; reply with the actual response
+            return fn(*args, **kwargs)
+
+    return _enable_cors
+
 @route('/')
+@enable_cors
 def index():
     id = str(uuid.uuid4())
     gan.save_images(id)
     return static_file("Images_" + id + ".png", root="./BoredApes")
 
-@route('/generate')
+@route('/uploadToIPFS/<id>')
+@enable_cors
+def upload(id):
+    res = upload_to_ipfs("./BoredApes/Images_" + id + ".png")
+    return res
+
+@route('/generateImage')
+@enable_cors
 def generate():
     id = str(uuid.uuid4())
     gan.save_images(id)
-    return {"image": "http://thischimpdoesnotexist.com/image/" + id, "tokenId": id}
+    
+    return {"uuid": id} #{"image": "http://thischimpdoesnotexist.com/image/" + id, "tokenId": id}
 
 @route('/image/<id>')
+@enable_cors
 def image(id):
     if (id != ""):
         return static_file("Images_" + id + ".png", root="./BoredApes")
@@ -228,16 +254,36 @@ def image(id):
         return "Error"
 
 @route('/metadata/<id>')
+@enable_cors
 def image(id):
     if (id != ""):
         return {"image": "http://thischimpdoesnotexist.com/image/" + id, "tokenId": id}
     else:
         return "Error"
 
+def upload_to_ipfs(filepath):
+    url = "https://api.pinata.cloud/pinning/pinFileToIPFS"
+
+    payload={'pinataOptions': '{"cidVersion": 1}',
+    'pinataMetadata': '{"name": "Test", "keyvalues": {"company": "Pinata"}}'}
+    files=[
+    ('file',('image.jpg',open(filepath,'rb'),'application/octet-stream'))
+    ]
+    headers = {
+    'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiJlOGY5M2VmNi0yZWQzLTRmNWQtOTRiYi0yYmRkYjA5MzhmZDkiLCJlbWFpbCI6IjIwQGRpY2suY20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwicGluX3BvbGljeSI6eyJyZWdpb25zIjpbeyJpZCI6IkZSQTEiLCJkZXNpcmVkUmVwbGljYXRpb25Db3VudCI6MX0seyJpZCI6Ik5ZQzEiLCJkZXNpcmVkUmVwbGljYXRpb25Db3VudCI6MX1dLCJ2ZXJzaW9uIjoxfSwibWZhX2VuYWJsZWQiOmZhbHNlLCJzdGF0dXMiOiJBQ1RJVkUifSwiYXV0aGVudGljYXRpb25UeXBlIjoic2NvcGVkS2V5Iiwic2NvcGVkS2V5S2V5IjoiMmE0ZjZmNjQ2OGRhZGZlNTA5ZjEiLCJzY29wZWRLZXlTZWNyZXQiOiJjZDhiMDA2MzYxMDg5YTcxOGY0NTI4Nzk0MTdmZDUxNzgzYmUyOGUwMjg4ZTE3MzU5MmExYWJmNGJhNzc0MmUzIiwiaWF0IjoxNjU1MDQwODc3fQ.6uPBTA95-s9n1bXTWF5iPKubH-St7PURJ2UkCbBEa_c'
+    }
+
+    response = requests.request("POST", url, headers=headers, data=payload, files=files)
+
+    print(response.text)
+    return response.text
+
+
 global gan
 gan=GAN()
-gan.load_models("discriminator_1000", "generator_1000")
+gan.load_models("discriminator_3200", "generator_3200")
+
 def main():
-    bottle.run(host='0.0.0.0', port=8080)
+    bottle.run(host='0.0.0.0', port=8080, server='paste')
 
 main()
